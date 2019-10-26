@@ -1,9 +1,14 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
 using NCMB;
 using NCMB.Extensions;
+using PlayFab;
+using PlayFab.ClientModels;
+using PlayFab.extensions;
+using UnityEditor;
 
 namespace naichilab
 {
@@ -47,7 +52,7 @@ namespace naichilab
         private RankingInfo _board;
         private IScore _lastScore;
 
-        private NCMBObject _ncmbRecord;
+//        private NCMBObject _ncmbRecord;
 
         /// <summary>
         /// 入力した名前
@@ -81,24 +86,57 @@ namespace naichilab
         {
             scoreLabel.text = _lastScore.TextForDisplay;
             captionLabel.text = string.Format("{0}ランキング", _board.BoardName);
-
+            yield return null;
             //ハイスコア取得
             {
                 highScoreLabel.text = "取得中...";
 
-                var hiScoreCheck = new YieldableNcmbQuery<NCMBObject>(_board.ClassName);
-                hiScoreCheck.WhereEqualTo(OBJECT_ID, ObjectID);
-                yield return hiScoreCheck.FindAsync();
+                //まずID作成
+                var id = ObjectID;
+                if (string.IsNullOrWhiteSpace(id)) ObjectID = GUID.Generate().ToString();
 
-                if (hiScoreCheck.Count > 0)
+                var loginWithCustomIdRequest = new LoginWithCustomIDRequest() { CustomId = ObjectID, CreateAccount = true ,InfoRequestParameters = new GetPlayerCombinedInfoRequestParams()
+                {
+                    GetPlayerProfile = true,
+                }};
+                var loginPromise = new YieldablePromise<LoginResult, PlayFabError>((resolve, reject) => PlayFabClientAPI.LoginWithCustomID(loginWithCustomIdRequest, resolve, reject));
+                yield return loginPromise;
+
+                if (loginPromise.Error != null)
+                {
+                    //TODO なんかエラーメッセージを画面に出すk？かな？
+                    Debug.Log(loginPromise.Error.ErrorMessage);
+                    yield break;
+                }
+                else
+                {
+                    Debug.Log(loginPromise.Result.LastLoginTime);
+                }
+
+                var hiscoreDataPromise = new YieldablePromise<GetPlayerStatisticsResult,PlayFabError>((resolve, reject) => PlayFabClientAPI.GetPlayerStatistics(new GetPlayerStatisticsRequest(), resolve, reject));
+                yield return hiscoreDataPromise;
+
+                //TODO 本当はここでユーザーがハイスコアを登録済みかどうかを知りたい。　どうやってとるのかわからんけどもね。
+                
+
+                //TODO てすと
+                PlayFabClientAPI.GetUserData(new GetUserDataRequest()
+                {
+                    PlayFabId = ""//TODO ここで他ユーザーも指定・・・？
+                }, result => { }, error => { });
+                //TODO
+
+
+                //全てのstatisticsが手に入っちゃうかもね
+                Debug.Log(hiscoreDataPromise.Result.Statistics.Count);
+                var hiscore = hiscoreDataPromise.Result.Statistics.FirstOrDefault(value => value.StatisticName == _board.ClassName);
+                if (hiscore != null)
                 {
                     //既にハイスコアは登録されている
-                    _ncmbRecord = hiScoreCheck.Result.First();
-
-                    var s = _board.BuildScore(_ncmbRecord[COLUMN_SCORE].ToString());
+                    var s = _board.BuildScore(hiscore.Value.ToString());
                     highScoreLabel.text = s != null ? s.TextForDisplay : "エラー";
 
-                    nameInputField.text = _ncmbRecord[COLUMN_NAME].ToString();
+                    nameInputField.text = loginPromise.Result.InfoResultPayload.PlayerProfile.DisplayName;
                 }
                 else
                 {
@@ -110,29 +148,31 @@ namespace naichilab
             //ランキング取得
             yield return StartCoroutine(LoadRankingBoard());
 
-            //スコア更新している場合、ボタン有効化
-            if (_ncmbRecord == null)
-            {
-                sendScoreButton.interactable = true;
-            }
-            else
-            {
-                var highScore = _board.BuildScore(_ncmbRecord[COLUMN_SCORE].ToString());
+            sendScoreButton.interactable = true;
 
-                if (_board.Order == ScoreOrder.OrderByAscending)
-                {
-                    //数値が低い方が高スコア
-                    sendScoreButton.interactable = _lastScore.Value < highScore.Value;
-                }
-                else
-                {
-                    //数値が高い方が高スコア
-                    sendScoreButton.interactable = highScore.Value < _lastScore.Value;
-                }
 
-                Debug.Log(string.Format("登録済みスコア:{0} 今回スコア:{1} ハイスコア更新:{2}", highScore.Value, _lastScore.Value,
-                    sendScoreButton.interactable));
-            }
+            //            //スコア更新している場合、ボタン有効化
+            //            if (_ncmbRecord == null)
+            //            {
+            //                sendScoreButton.interactable = true;
+            //            }
+            //            else
+            //            {
+            //                var highScore = _board.BuildScore(_ncmbRecord[COLUMN_SCORE].ToString());
+            //
+            //                if (_board.Order == ScoreOrder.OrderByAscending)
+            //                {
+            //                    //数値が低い方が高スコア
+            //                    sendScoreButton.interactable = _lastScore.Value < highScore.Value;
+            //                }
+            //                else
+            //                {
+            //                    //数値が高い方が高スコア
+            //                    sendScoreButton.interactable = highScore.Value < _lastScore.Value;
+            //                }
+            //
+            //                Debug.Log(string.Format("登録済みスコア:{0} 今回スコア:{1} ハイスコア更新:{2}", highScore.Value, _lastScore.Value,sendScoreButton.interactable));
+            //            }
         }
 
 
@@ -146,28 +186,35 @@ namespace naichilab
             sendScoreButton.interactable = false;
             highScoreLabel.text = "送信中...";
 
-            //ハイスコア送信
-            if (_ncmbRecord == null)
+            var statisticUpdate = new StatisticUpdate
             {
-                _ncmbRecord = new NCMBObject(_board.ClassName);
-                _ncmbRecord.ObjectId = ObjectID;
-            }
+                // 統計情報名を指定します。
+                StatisticName = _board.ClassName,
+                Value = (int)_lastScore.Value,
+            };
 
-            _ncmbRecord[COLUMN_NAME] = InputtedNameForSave;
-            _ncmbRecord[COLUMN_SCORE] = _lastScore.Value;
-            NCMBException errorResult = null;
+            var request = new UpdatePlayerStatisticsRequest
+            {
+                Statistics = new List<StatisticUpdate>
+                {
+                    statisticUpdate
+                }
+            };
 
-            yield return _ncmbRecord.YieldableSaveAsync(error => errorResult = error);
+            var sendScore =  new YieldablePlayfabPromise<UpdatePlayerStatisticsResult>((OnSuccess,OnError)=>PlayFabClientAPI.UpdatePlayerStatistics(request, OnSuccess, OnError));
+            yield return sendScore;
 
-            if (errorResult != null)
+//            _ncmbRecord[COLUMN_NAME] = InputtedNameForSave;   //TODO DisplayName
+
+
+
+
+            if (sendScore.Error != null)
             {
                 //NCMBのコンソールから直接削除した場合に、該当のobjectIdが無いので発生する（らしい）
-                _ncmbRecord.ObjectId = null;
-                yield return _ncmbRecord.YieldableSaveAsync(error => errorResult = error); //新規として送信
+                //TODO なんかエラー
+                yield break;
             }
-
-            //ObjectIDを保存して次に備える
-            ObjectID = _ncmbRecord.ObjectId;
 
             highScoreLabel.text = _lastScore.TextForDisplay;
 
@@ -192,40 +239,45 @@ namespace naichilab
             //2017.2.0b3の描画されないバグ暫定対応
             MaskOffOn();
 
-            var so = new YieldableNcmbQuery<NCMBObject>(_board.ClassName);
-            so.Limit = 30;
-            if (_board.Order == ScoreOrder.OrderByAscending)
+            //これを指定することで、ランキングで得られる情報が増える（らしい？）
+            var playerProfileViewConstraints = new PlayerProfileViewConstraints()
             {
-                so.OrderByAscending(COLUMN_SCORE);
-            }
-            else
+                ShowDisplayName = true,
+                ShowStatistics = true
+            };
+
+            var request = new GetLeaderboardRequest
             {
-                so.OrderByDescending(COLUMN_SCORE);
-            }
+                StatisticName = _board.ClassName, // 統計情報名を指定します。
+                StartPosition = 0, // 何位以降のランキングを取得するか指定します。
+                MaxResultsCount = 30, // ランキングデータを何件取得するか指定します。最大が100です。
+                ProfileConstraints = playerProfileViewConstraints
+            };
 
-            yield return so.FindAsync();
+            var so = new YieldablePromise<GetLeaderboardResult, PlayFabError>((resolve, reject) => PlayFabClientAPI.GetLeaderboard(request, resolve, reject));
+            yield return so;
 
-            Debug.Log("データ取得 : " + so.Count.ToString() + "件");
+            Debug.Log("データ取得 : " + so.Result.Leaderboard.Count.ToString() + "件");
             Destroy(msg);
 
             if (so.Error != null)
             {
                 Instantiate(unavailableNodePrefab, scrollViewContent);
             }
-            else if (so.Count > 0)
+            else if (so.Result.Leaderboard.Count > 0)
             {
                 int rank = 0;
-                foreach (var r in so.Result)
+                foreach (var r in so.Result.Leaderboard)
                 {
                     var n = Instantiate(rankingNodePrefab, scrollViewContent);
                     var rankNode = n.GetComponent<RankingNode>();
                     rankNode.NoText.text = (++rank).ToString();
-                    rankNode.NameText.text = r[COLUMN_NAME].ToString();
+                    rankNode.NameText.text = r.DisplayName;
 
-                    var s = _board.BuildScore(r[COLUMN_SCORE].ToString());
+                    var s = _board.BuildScore(r.StatValue.ToString());
                     rankNode.ScoreText.text = s != null ? s.TextForDisplay : "エラー";
 
-//                    Debug.Log(r[COLUMN_SCORE].ToString());
+    //                    Debug.Log(r[COLUMN_SCORE].ToString());
                 }
             }
             else

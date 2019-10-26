@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NCMB.Extensions
 {
-    /// <summary>
+/*    /// <summary>
     /// 待機可能NCMBQueryサブクラス
     /// ResultとErrorを外で用意するのが面倒なので作成。ついでにCountメソッド追加済み
     /// </summary>
@@ -72,4 +73,58 @@ namespace NCMB.Extensions
             return new WaitUntil(() => isComplete);
         }
     }
+    */
+}
+
+namespace PlayFab.extensions
+{
+
+    public static class NCMBExtensions
+    {
+        public static CustomYieldInstruction ToYieldable<TSuccess, TError>(Action<Action<TSuccess>, Action<TError>> callbackregist)
+        {
+            var isComplete = false;
+            Action<TSuccess> resolve = suc => { isComplete = true; };
+            Action<TError> reject = suc => { isComplete = true; };
+            callbackregist(resolve, reject);
+            return new WaitUntil(() => isComplete);
+        }
+    }
+
+    public class YieldablePromise<TSuccess,TError> : CustomYieldInstruction
+    {
+        public delegate void PromiseResolveReject(Action<TSuccess> resolve, Action<TError> reject);
+
+        public TSuccess Result { private set; get; }
+        public TError Error { private set; get; }
+
+        private bool isComplete = false;
+
+        public YieldablePromise(PromiseResolveReject callbackregist)
+        {
+            callbackregist(success =>
+            {
+                Result = success;
+                isComplete = true;
+            }, error =>
+            {
+                Error = error;
+                isComplete = true;
+            });
+        }
+
+        public override bool keepWaiting => !isComplete;
+    }
+
+    /// <summary>
+    /// PlayFabAPIはError時にはPlayFabErrorが返却されるようなので、定義
+    /// </summary>
+    /// <typeparam name="TSuccess"></typeparam>
+    public class YieldablePlayfabPromise<TSuccess> : YieldablePromise<TSuccess,PlayFabError>
+    {
+        public YieldablePlayfabPromise(PromiseResolveReject callbackregist) : base(callbackregist)
+        {
+        }
+    }
+
 }
