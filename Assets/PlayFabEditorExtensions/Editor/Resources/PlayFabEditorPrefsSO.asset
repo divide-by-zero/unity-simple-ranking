@@ -13,11 +13,11 @@ MonoBehaviour:
   m_Name: PlayFabEditorPrefsSO
   m_EditorClassIdentifier: 
   DevAccountEmail: divide.by.zero.divide.by.zero@gmail.com
-  DevAccountToken: obadkay8g7st8yn9fctz7jwwpuut3dy7gf7azfdq7popyyip3zs7m69ek55yibbh3ri7yupj8qjopnz36ka37qg78iwphzufdnp9ezbxxknyqogd3gmc9ub3fqimwja8qwspqbf8iaktqon6mucw9oy6szxz18pn88mq3u84qd83i87tt6koss19a9omtickirembka4
+  DevAccountToken: fyrecqiwgo4i96iogboe3a7myjcrc5zzxzynrhnh1xz3kapfr5h6dqb8ykdykjisbb88o9d9itoxeopn79i47uqmh9mutd33zdah6cd3gd8rjd8hm9ww4ptwc1wkwnyudzx9gz9aomo1we3bk9ayzsdbyyt6cf8yo96th816rc8odzory3fx73x69nwnqrt8cjn1jooz
   SelectedStudio: Dividebyzero
   SdkPath: Assets/PlayFabSdk
   EdExPath: 
-  LocalCloudScriptPath: 
+  LocalCloudScriptPath: F:/UnityProject/unity-simple-ranking/Assets/PlayFabEditorExtensions/Editor/Resources/.CloudScript.js
   PanelIsShown: 0
   curMainMenuIdx: 1
   curSubMenuIdx: 0

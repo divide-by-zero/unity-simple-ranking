@@ -15,7 +15,7 @@ MonoBehaviour:
   TitleId: 7D8BA
   DeveloperSecretKey: DARNCQDESPZWGYJA1669JIYME6YUP7FK866KW1NIOB3I1PTXBZ
   ProductionEnvironmentUrl: 
-  RequestType: 2
+  RequestType: 0
   AdvertisingIdType: 
   AdvertisingIdValue: 
   DisableAdvertising: 0

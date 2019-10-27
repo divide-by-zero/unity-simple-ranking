@@ -38,35 +38,47 @@ namespace naichilab
         /// </summary>
         public string CustomFormat;
 
-
         /// <summary>
-        /// テキストからIScoreを復元する
+        /// PlayFabのStatisticからIScoreを復元する
         /// </summary>
-        /// <param name="scoreText"></param>
+        /// <param name="statisticValue"></param>
         /// <returns></returns>
-        public IScore BuildScore(string scoreText)
+        public IScore BuildScore(int statisticValue)
         {
+            //オーダーが昇順の場合はint.MaxValueから実データを引いてあげた値をサーバーに送っているので、逆算してあげる
+            var realValue = Order == ScoreOrder.OrderByAscending ? int.MaxValue - statisticValue : statisticValue;
             try
             {
                 switch (Type)
                 {
                     case ScoreType.Number:
-                        double d = double.Parse(scoreText);
+                        var d = realValue / (float)(1 << 16);
                         return new NumberScore(d, CustomFormat);
                         break;
                     case ScoreType.Time:
-                        long ticks = long.Parse(scoreText);
-                        TimeSpan t = new TimeSpan(ticks);
+                        var t = new TimeSpan(realValue);
                         return new TimeScore(t, CustomFormat);
                         break;
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("不正なデータが渡されました。[" + scoreText + "]");
+                Debug.LogWarning("不正なデータが渡されました。[" + statisticValue + "]");
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// PlayFabのStatisticに送るためintに変換してあげる
+        /// </summary>
+        /// <param name="score"></param>
+        /// <returns></returns>
+        public int ToStatisticValue(IScore score)
+        {
+            var statisticValue = Type == ScoreType.Number ? (int)(score.Value * (1 << 16)) : (int)score.Value;
+            //オーダーが昇順の場合はint.MaxValueから実データを引いてあげた値をサーバーに送っているので、逆算してあげる
+            return Order == ScoreOrder.OrderByAscending ? int.MaxValue - statisticValue : statisticValue;
         }
     }
 }

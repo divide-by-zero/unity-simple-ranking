@@ -7,17 +7,21 @@ using UnityEngine.UI;
 public class SampleSceneManager : MonoBehaviour
 {
     public Text scoreText;
-    [NonSerialized] int score = 0;
+    [NonSerialized] float score = 0;
+
+    public Text stopWatchText;
+    [NonSerialized] TimeSpan time;
+    private bool isStart;
 
     public void OnPlusButtonPressed()
     {
-        score++;
+        score+=0.1f;
         scoreText.text = score.ToString();
     }
 
     public void OnMinusButtonPressed()
     {
-        score--;
+        score-=0.1f;
         scoreText.text = score.ToString();
     }
 
@@ -31,10 +35,30 @@ public class SampleSceneManager : MonoBehaviour
         naichilab.RankingLoader.Instance.SendScoreAndShowRanking(score, 1);
     }
 
+    public void OnResultButton2Pressed()
+    {
+        naichilab.RankingLoader.Instance.SendScoreAndShowRanking(time, 2);
+    }
+
+    public void OnStopWatchButtonPressed()
+    {
+        isStart = !isStart;
+    }
+
     public void LocalSaveReset()
     {
         score = 0;
+        time = TimeSpan.Zero;
         scoreText.text = score.ToString();
         PlayerPrefs.DeleteAll();
+    }
+
+    private void Update()
+    {
+        if (isStart)
+        {
+            time+= TimeSpan.FromSeconds(Time.deltaTime);
+            stopWatchText.text = time.ToString("mm':'ss'.'ff");
+        }
     }
 }
